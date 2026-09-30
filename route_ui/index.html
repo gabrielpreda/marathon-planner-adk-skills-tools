@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Marathon Route Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+      :root { color-scheme: light; font-family: system-ui, sans-serif; }
+      body { margin: 0; background: #f4f6f8; color: #17202a; }
+      header { padding: 14px 20px; background: #17202a; color: white; }
+      h1 { margin: 0 0 4px; font-size: 1.2rem; }
+      #status { font-size: .88rem; opacity: .85; }
+      #map { height: calc(100vh - 72px); min-height: 540px; }
+      .legend { background: white; padding: 10px 12px; line-height: 1.8; box-shadow: 0 1px 5px #0003; border-radius: 4px; }
+      .legend span { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 50%; }
+      .route-icon { display: grid; place-items: center; width: 26px; height: 26px; border: 2px solid white; border-radius: 50%; box-shadow: 0 1px 4px #0008; font-size: 15px; }
+      .popup-title { font-weight: 700; margin-bottom: 4px; }
+      .popup-row { margin: 2px 0; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Las Vegas Marathon Route</h1>
+      <div id="status">Loading route…</div>
+    </header>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+      const map = L.map('map');
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      const styles = {
+        start: { color: '#16803c', icon: '▶', label: 'Start' },
+        finish: { color: '#b42318', icon: '🏁', label: 'Finish' },
+        water_station: { color: '#087f9c', icon: '💧', label: 'Water station' },
+        medical_tent: { color: '#c2185b', icon: '✚', label: 'Medical tent' },
+        portable_toilet: { color: '#6d4c41', icon: '🚻', label: 'Portable toilet' },
+        cheer_zone: { color: '#7b2cbf', icon: '★', label: 'Cheer zone' }
+      };
+
+      function propertyType(feature) {
+        const props = feature.properties || {};
+        return props['marker-type'] || props.type || 'point';
+      }
+
+      function popup(feature) {
+        const props = feature.properties || {};
+        const type = propertyType(feature);
+        const style = styles[type] || { label: type };
+        const rows = [`<div class="popup-title">${style.label}</div>`];
+        for (const [key, value] of Object.entries(props)) {
+          if (key === 'marker-type' || value === null || value === undefined) continue;
+          rows.push(`<div class="popup-row"><b>${key}:</b> ${value}</div>`);
+        }
+        return rows.join('');
+      }
+
+      function pointToLayer(feature, latlng) {
+        const type = propertyType(feature);
+        const style = styles[type] || { color: '#455a64', icon: '•' };
+        return L.marker(latlng, {
+          icon: L.divIcon({
+            className: '', html: `<div class="route-icon" style="background:${style.color}">${style.icon}</div>`,
+            iconSize: [30, 30], iconAnchor: [15, 15]
+          })
+        });
+      }
+
+      fetch('/api/route')
+        .then(response => response.json().then(data => ({ ok: response.ok, data })))
+        .then(({ ok, data }) => {
+          if (!ok) throw new Error(data.error || 'Could not load route');
+          const route = data.route;
+          const routeLayer = L.geoJSON(route, {
+            style: feature => feature.properties?.route_type === 'marathon'
+              ? { color: '#1565c0', weight: 5, opacity: .9 }
+              : { color: '#1565c0', weight: 4, opacity: .85 },
+            pointToLayer,
+            onEachFeature: (feature, layer) => {
+              if (feature.geometry?.type === 'Point') layer.bindPopup(popup(feature));
+            }
+          }).addTo(map);
+          map.fitBounds(routeLayer.getBounds(), { padding: [25, 25] });
+          const line = route.features.find(f => f.properties?.route_type === 'marathon');
+          const distance = line?.properties?.distance_mi;
+          document.getElementById('status').textContent =
+            `${distance || '—'} miles · source: ${data.source}`;
+          addLegend();
+        })
+        .catch(error => {
+          document.getElementById('status').textContent = `Error: ${error.message}`;
+          console.error(error);
+        });
+
+      function addLegend() {
+        const legend = L.control({ position: 'bottomright' });
+        legend.onAdd = () => {
+          const div = L.DomUtil.create('div', 'legend');
+          div.innerHTML = '<b>Course points</b><br>' + Object.entries(styles).map(([key, value]) =>
+            `<div><span style="background:${value.color}"></span>${value.label}</div>`).join('');
+          return div;
+        };
+        legend.addTo(map);
+      }
+    </script>
+  </body>
+</html>
