@@ -22,17 +22,22 @@ import logging
 configure_logging()
 logger = logging.getLogger(__name__)
 
+### Step 1: Generic instructions, no tools
 instruction = "Answer user questions to the best of your knowledge"
 description = "A helpful assistant for user questions."
 tools = []
 
+### Step 2: Planner instructions, no tools
 # # TODO: Replace Instruction and Description Prompt only
 # instruction=PLANNER_INSTRUCTION_NO_TOOLS
 # description="Expert GIS analyst for marathon route and event planning."
+# tools = []
 
+### Step 3: Planner instructions, with tools
 # # TODO: Replaces Tools
-#instruction=PLANNER_INSTRUCTION
-#tools=get_tools()
+# description="Expert GIS analyst for marathon route and event planning."
+# instruction=PLANNER_INSTRUCTION
+# tools=get_tools()
 
 root_agent = Agent(
     model="gemini-2.5-flash",

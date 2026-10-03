@@ -179,17 +179,70 @@ The repository contains the complete agent. Start with these files:
 - `planner_agent/utils.py` contains `PromptBuilder`, which assembles the named
   sections in order.
 
-### Step 1: Simple instructions, no tools
 
-To follow the progression, begin with the generic baseline. In
-`planner_agent/agent.py`, leave the generic instruction and empty tool list in
-place, and temporarily comment out the later assignments to
-`PLANNER_INSTRUCTION` and `get_tools()`. Run the agent and ask a simple general
-question. 
+### Before testing: instructions, skills, and tools
+
+This codelab compares three agent configurations. The first has generic
+instructions and no tools. The second adds marathon-planning instructions but
+still has no tools. The third adds the full planner instructions and registers
+skills and tools.
+
+A **skill** provides focused guidance that the agent can load when relevant.
+A **tool** lets the agent perform an operation or retrieve information. In this
+project, the GIS skill guides route planning, and GIS tools generate and report
+the route. Maps MCP tools can look up real-world information when configured.
+
+As you run each version, watch for two things: how the instructions shape the
+answer, and whether the agent actually calls tools to produce or retrieve
+results.
+
+### Run locally and inspect events
+
+You can test the application in two ways:
+
+Use `adk run` command:
 
 ```bash
 adk run planner_agent
 ```
+
+Alternatively, you can start the ADK web interface:
+
+```bash
+adk web
+```
+
+If you run from GCP Cloud Shell terminal, use:
+
+```bash
+adk web --allow_origins "regex:.*"
+```
+
+Open `http://127.0.0.1:8000`, choose `planner_agent`, and send a planning
+request such as:
+
+```text
+Plan a marathon for 10000 participants in Las Vegas on April 24, 2027 in the evening. Include the route, logistics, safety, community impact, and weather considerations.
+```
+
+Inspect the skill-load and tool-call events, then review the generated plan.
+
+Stop either local process with Ctrl+C when finished.
+
+### Step 1: Simple instructions, no tools
+
+To follow the progression, begin with the generic baseline. In
+`planner_agent/agent.py` these lines are uncommented:
+
+```python
+instruction = "Answer user questions to the best of your knowledge"
+description = "A helpful assistant for user questions."
+tools = []
+```
+
+Run the agent and ask a simple general question.
+
+Then ask the question given above.
 
 This shows the behavior of a basic agent before specialized
 instructions or tools are added.
@@ -205,31 +258,13 @@ description = "Expert GIS analyst for marathon route and event planning."
 tools = []
 ```
 
-Run the agent and try a general question, then ask it to plan a marathon:
-
-```bash
-adk run planner_agent
-```
+Run the agent and try a general question, then ask it to plan a marathon.
 
 The prompt-only version can reason from its instructions but cannot call route
 or Maps tools. 
 
-### Step 3: planner instructions, skills & tools
 
-In the final step, restore the full configuration already
-provided in the repository:
-
-```python
-instruction = PLANNER_INSTRUCTION
-tools = get_tools()
-```
-
-The full prompt tells the agent how to select skills, plan logistics, validate
-safety, and present a readable plan. The model and agent implementation are
-defined in `agent.py`; use the version in the checkout rather than copying
-older model examples. Restore the final configuration before deploying.
-
-## 5. Explore skills and tools
+### Explore skills and tools
 
 The skills live under `planner_agent/skills/` and are loaded from their
 `SKILL.md` files by `planner_agent/tools.py`:
@@ -250,26 +285,24 @@ the Maps endpoint and authenticates with the API key. The Maps API key can be
 provided through the agent environment or resolved through the configured
 Secret Manager fallback described above.
 
-## 6. Run locally and inspect events
+### Step 3: planner instructions, skills & tools
 
-Start the ADK web interface:
+In the final step, restore the full configuration already
+provided in the repository:
 
-```bash
-adk web
+```python
+instruction = PLANNER_INSTRUCTION
+tools = get_tools()
 ```
 
-Open `http://127.0.0.1:8000`, choose `planner_agent`, and send a planning
-request such as:
+The full prompt tells the agent how to select skills, plan logistics, validate
+safety, and present a readable plan. The model and agent implementation are
+defined in `agent.py`; use the version in the checkout rather than copying
+older model examples. Restore the final configuration before deploying.
 
-```text
-Plan a marathon for 10000 participants in Las Vegas on April 24, 2027 in the evening timeframe
-```
 
-Inspect the skill-load and tool-call events, then review the generated plan.
-The terminal interface is also available with `adk run planner_agent`.
-Stop either local process with Ctrl+C when finished.
 
-## 7. Deploy to Agent Engine
+## 5. Deploy to Agent Engine
 
 Deploy from the repository root. Use the same project ID and runtime region
 configured above:
@@ -298,7 +331,7 @@ not type a placeholder such as `YOUR_RUNTIME_REGION` as the region value.
 Open the runtime in the Cloud Console or test it in the Agent Engine
 playground. The runtime can also be called from this repository's CLI.
 
-## 8. List and call the deployed agent
+## 6. List and call the deployed agent
 
 Make sure the root `.env` contains the deployed runtime's project and region,
 then list deployed agents:
@@ -317,11 +350,10 @@ python main.py prompt \
 ```
 
 
-## 9. Visualize the marathon route
+## 7. Visualize the marathon route
 
 The agent run generated the file `marathon_route.geojson`. 
 Visualise the marathon route generated as an artefact by the agent with:
-
 
 ```bash
 python route_ui.py
@@ -330,8 +362,7 @@ python route_ui.py
 Then open the visualization tool by accessing `http://127.0.0.1:8080`.
 
 
-
-## 10. Troubleshooting
+## 8. Troubleshooting
 
 - **Authentication errors:** Check `gcloud auth list`, repeat both login
   commands, and confirm that your account has the required cloud permissions.
@@ -346,7 +377,7 @@ Then open the visualization tool by accessing `http://127.0.0.1:8080`.
   Maps MCP API is enabled for the project, and any Secret Manager identity has
   permission to read the secret version.
 
-## 11. Clean up
+## 9. Clean up
 
 Delete the runtime when it is no longer needed:
 
