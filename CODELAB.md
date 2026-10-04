@@ -198,6 +198,7 @@ results.
 
 ### Run locally and inspect events
 
+You will perform three tests (Step 1 to Step 3), with three versions of the agents setup.
 You can test the application in two ways:
 
 Use `adk run` command:
@@ -248,7 +249,7 @@ This shows the behavior of a basic agent before specialized
 instructions or tools are added.
 
 
-### Step 2: prompt-onpy instructions, no tools
+### Step 2: prompt-only instructions, no tools
 
 Next, use the prompt-only instruction and keep the tool list empty:
 
@@ -346,7 +347,7 @@ Send a prompt using the runtime ID:
 export AGENT_ID="YOUR_AGENT_ID"
 python main.py prompt \
   --agent-id $AGENT_ID \
-  --message "Plan a marathon for 10000 participants in Las Vegas on April 24, 2027 in the evening"
+  --message "Plan a marathon for 10000 participants in Las Vegas on April 24, 2027 in the evening. Include the route, logistics, safety, community impact, and weather considerations."
 ```
 
 

@@ -75,7 +75,36 @@ def _write_route_geojson(route, route_file):
     print(f"\nSaved route GeoJSON to {route_file}")
 
 
-async def prompt_agent(client, project_id, location, agent_id, message, route_file):
+def _find_text(value):
+    """Collect text parts from an ADK event or tool response."""
+    if isinstance(value, dict):
+        content = value.get("content")
+        if isinstance(content, dict):
+            parts = content.get("parts")
+            if isinstance(parts, list):
+                return "".join(
+                    part["text"]
+                    for part in parts
+                    if isinstance(part, dict) and isinstance(part.get("text"), str)
+                )
+        return "".join(_find_text(child) for child in value.values())
+    if isinstance(value, list):
+        return "".join(_find_text(child) for child in value)
+    return ""
+
+
+def _write_markdown_response(response, response_file):
+    if not response.strip():
+        print("No markdown response was returned; no response file was written.")
+        return
+    response_file.parent.mkdir(parents=True, exist_ok=True)
+    response_file.write_text(response.rstrip() + "\n", encoding="utf-8")
+    print(f"Saved markdown response to {response_file}")
+
+
+async def prompt_agent(
+    client, project_id, location, agent_id, message, route_file, response_file
+):
     name = f"projects/{project_id}/locations/{location}/reasoningEngines/{agent_id}"
     remote_app = client.agent_engines.get(name=name)
 
@@ -87,11 +116,15 @@ async def prompt_agent(client, project_id, location, agent_id, message, route_fi
 
     print(f"Streaming response from agent {agent_id}:\n")
     route_geojson = None
+    markdown_response = []
     async for event in remote_app.async_stream_query(
         user_id="u_123", session_id=session_id, message=message
     ):
         print(event, end="", flush=True)
         event_data = _to_jsonable(event)
+        text = _find_text(event_data)
+        if text:
+            markdown_response.append(text)
         candidate = _find_route_geojson(event_data)
         if candidate is not None:
             route_geojson = candidate
@@ -101,6 +134,7 @@ async def prompt_agent(client, project_id, location, agent_id, message, route_fi
         _write_route_geojson(route_geojson, route_file)
     else:
         print("No route GeoJSON was returned; no map file was written.")
+    _write_markdown_response("".join(markdown_response), response_file)
 
 
 def list_agents(client):
@@ -135,6 +169,12 @@ async def main():
         "--agent-id",
         required=True,
         help="The ID of the deployed agent (e.g. your AGENT_RUNTIME_ID)",
+    )
+    prompt_parser.add_argument(
+        "--response-file",
+        type=Path,
+        default=Path("marathon_plan.md"),
+        help="Where to save the agent's final markdown response",
     )
     prompt_parser.add_argument(
         "--message", required=True, help="The message/prompt to send"
@@ -177,6 +217,7 @@ async def main():
             args.agent_id,
             args.message,
             args.route_file,
+            args.response_file,
         )
     elif args.command == "list":
         # list() and delete() are synchronous operations in the SDK
