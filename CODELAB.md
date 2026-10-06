@@ -20,52 +20,89 @@ You need:
 
 - A Google Cloud project with billing enabled.
 - Python 3.12 or newer and `pip`.
-- The Google Cloud CLI (`gcloud`).
+- The Google Cloud CLI (`gcloud`), installed locally for deployment and cloud setup.
 - A browser for the Cloud Console and local ADK web interface.
 - Basic familiarity with Python and terminal commands.
 - A Maps API key if you want the remote Maps MCP tools enabled.
 - Permissions to enable services, use Vertex AI, and deploy an Agent Engine
   runtime. Ask your administrator for the required roles if needed.
 
-Authenticate the Google Cloud CLI and Application Default Credentials (ADC):
+### Install the Google Cloud CLI locally
 
-Verify the authentication:
+If `gcloud` is not installed, follow the steps for your computer. The official
+installation pages include the current downloads and platform requirements.
+
+**macOS**
+
+1. Open the [Google Cloud CLI installation page](https://cloud.google.com/sdk/docs/install)
+   and download the archive for your Mac: Apple silicon (ARM64) or Intel
+   (x86_64).
+2. Extract the archive, open Terminal in the extracted folder, and run:
+
+   ```bash
+   ./google-cloud-sdk/install.sh
+   ```
+
+3. Accept the option to add `gcloud` to your `PATH`, then open a new Terminal.
+
+**Windows**
+
+1. Download and run the signed
+   [Google Cloud CLI installer](https://dl.google.com/dl/cloudsdk/channels/rapid/GoogleCloudSDKInstaller.exe).
+   Keep the bundled Python option enabled unless you already have a supported
+   Python installation.
+2. Complete the installer, open a new PowerShell window, and check that
+   `gcloud` is available.
+
+Initialize the CLI and verify the installation on either platform:
+
 ```bash
-gcloud auth login
+gcloud init
+gcloud --version
 ```
 
-Confirmm the project is configured:
+`gcloud init` signs in and lets you choose a default project. For other
+operating systems or installation methods, see the
+[Google Cloud CLI installation guide](https://cloud.google.com/sdk/docs/install).
+
+### Authenticate and select the project
+
+Check the selected project and signed-in account:
 
 ```bash
 gcloud config get project
 ```
 
-Verify authentication:
-
 ```bash
 gcloud auth list
 ```
 
-Authenticate:
+Set the project ID before using it in the commands below:
+
+```bash
+export GOOGLE_CLOUD_PROJECT="YOUR_PROJECT_ID"
+export GOOGLE_CLOUD_LOCATION="europe-west1"  # Or another supported runtime region.
+gcloud config set project "$GOOGLE_CLOUD_PROJECT"
+```
+
+In Windows PowerShell, set the same variables with:
+
+```powershell
+$env:GOOGLE_CLOUD_PROJECT = "YOUR_PROJECT_ID"
+$env:GOOGLE_CLOUD_LOCATION = "europe-west1"
+gcloud config set project "$env:GOOGLE_CLOUD_PROJECT"
+```
+
+Authenticate Application Default Credentials (ADC), which ADK uses for Google
+Cloud API calls:
 
 ```bash
 gcloud auth application-default login
 ```
 
-Set your project as the default project:
-
-```bash
-gcloud config set project "$GOOGLE_CLOUD_PROJECT"
-```
-
 ### Enable APIs
 
 Set your project ID in the shell and enable the APIs used by this codelab:
-
-```bash
-export GOOGLE_CLOUD_PROJECT="YOUR_PROJECT_ID"
-export GOOGLE_CLOUD_LOCATION="europe-west1"  # Or another supported runtime region.
-```
 
 ```bash
 gcloud services enable \
@@ -77,6 +114,12 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   serviceusage.googleapis.com \
   --project "$GOOGLE_CLOUD_PROJECT"
+```
+
+In Windows PowerShell, run the API enable command on one line:
+
+```powershell
+gcloud services enable aiplatform.googleapis.com run.googleapis.com secretmanager.googleapis.com mapstools.googleapis.com storage.googleapis.com cloudresourcemanager.googleapis.com serviceusage.googleapis.com --project "$env:GOOGLE_CLOUD_PROJECT"
 ```
 
 ### Alternative: use a Cloud Shell
@@ -110,7 +153,32 @@ Without a resolvable key, the agent starts with Maps tools disabled.
 
 ## 2. Install the project
 
-From the repository root, create and activate an uv virtual environment, then
+Check whether `uv` is installed:
+
+```bash
+uv --version
+```
+
+If the command is not found, install `uv` using its official standalone
+installer:
+
+**macOS (Terminal):**
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell):**
+
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen the terminal if needed, then confirm `uv --version` works. See
+the [uv installation guide](https://docs.astral.sh/uv/getting-started/installation/)
+for other installation options and troubleshooting.
+
+From the repository root, create and activate the virtual environment, then
 install the project dependencies:
 
 ```bash
@@ -118,8 +186,14 @@ uv venv .venv
 source .venv/bin/activate
 ```
 
+On Windows PowerShell, activate the environment with:
+
+```powershell
+.venv\Scripts\Activate.ps1
+```
+
 ```bash
-uv pip install -r planner_agent/requirements.txt
+uv pip install -r requirements.txt
 ```
 
 
@@ -136,14 +210,22 @@ cp planner_agent/sample.env planner_agent/.env
 cp sample.env .env
 ```
 
-In `planner_agent/.env`, set the project ID and Maps API key:
+In `planner_agent/.env`, set the project ID. Add a Maps API key only if you
+want to enable Maps MCP tools directly; alternatively, configure the optional
+Secret Manager fallback described above. Without either key source, Maps tools
+start disabled.
 
 ```dotenv
 GOOGLE_GENAI_USE_VERTEXAI=1
 GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID
 GOOGLE_CLOUD_LOCATION=YOUR_MODEL_LOCATION
-GOOGLE_MAPS_API_KEY=YOUR_MAPS_API_KEY
 PLANNER_LOG_LEVEL=INFO
+```
+
+If using a direct Maps API key, also set:
+
+```dotenv
+GOOGLE_MAPS_API_KEY=YOUR_MAPS_API_KEY
 ```
 
 The model location is used for Vertex AI calls made by the agent. In the root
@@ -313,6 +395,13 @@ export GOOGLE_CLOUD_PROJECT="YOUR_PROJECT_ID"
 export GOOGLE_CLOUD_LOCATION="europe-west1"  # Or another supported runtime region.
 ```
 
+In Windows PowerShell, set the variables with:
+
+```powershell
+$env:GOOGLE_CLOUD_PROJECT = "YOUR_PROJECT_ID"
+$env:GOOGLE_CLOUD_LOCATION = "europe-west1"
+```
+
 Run the deploy to Agent Engine script:
 
 ```bash
@@ -323,6 +412,12 @@ adk deploy agent_engine \
   --region "$GOOGLE_CLOUD_LOCATION" \
   --display_name marathon-planner \
   planner_agent
+```
+
+In Windows PowerShell, run:
+
+```powershell
+adk deploy agent_engine --env_file planner_agent/.env --requirements_file planner_agent/requirements.txt --project "$env:GOOGLE_CLOUD_PROJECT" --region "$env:GOOGLE_CLOUD_LOCATION" --display_name marathon-planner planner_agent
 ```
 
 The command prints the resource name and runtime ID. Save the runtime ID for
@@ -400,6 +495,8 @@ services.
 
 ## References
 
+- [Google Cloud CLI installation](https://cloud.google.com/sdk/docs/install)
+- [uv installation](https://docs.astral.sh/uv/getting-started/installation/)
 - [Agent Engine setup](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/set-up)
 - [Agent Engine deployment](https://docs.cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/deploy)
 - [Google Cloud MCP authentication](https://docs.cloud.google.com/mcp/set-up-authentication-mcp-servers)
