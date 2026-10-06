@@ -1205,46 +1205,29 @@ def _generate_zone_sweep_route(
 
         # ---- Distance adjustment ----
         if total_dist > TARGET_DIST_MI:
-            corridor_len = len(corridor_path)
-
-            # Phase 1: Trim from route end (finish side), but stop
-            # if the finish drifts too far from the target POI.
-            trimmed = 0.0
-            poi_check = (
-                target_poi_coord if target_poi_coord is not None else finish_node
-            )
-            while (
-                total_dist - trimmed > TARGET_DIST_MI + 0.5
-                and len(full_route) > corridor_len + 2
-            ):
-                # Before popping, check if the new end (full_route[-2])
-                # would be too far from the target POI.
-                if len(full_route) >= 3:
-                    new_end_dist = _haversine(full_route[-2], poi_check)
-                    if new_end_dist > 0.75:
-                        break  # Stop trimming to keep finish near POI
-                seg = _haversine(full_route[-2], full_route[-1])
-                full_route.pop()
-                trimmed += seg
-
-            total_dist -= trimmed
-
-            # Phase 2: Fine-tune remaining excess by interpolating last segment.
+            # Exact distance takes priority over staying near the requested
+            # finish landmark. Remove whole route segments from the end, then
+            # interpolate the final segment to land on the target distance.
             excess = total_dist - TARGET_DIST_MI
-            if excess > 0.01 and len(full_route) >= 2:
-                trim_limit = min(excess, 0.5)
+            while len(full_route) > 1:
                 last_seg = _haversine(full_route[-2], full_route[-1])
-                if last_seg > 0:
-                    keep = last_seg - trim_limit
-                    if keep > 0:
-                        new_end = _interpolate(
-                            full_route[-2],
-                            full_route[-1],
-                            keep,
-                            last_seg,
-                        )
-                        full_route[-1] = tuple(new_end)
-                        total_dist -= trim_limit
+                if last_seg > excess:
+                    keep = last_seg - excess
+                    full_route[-1] = tuple(
+                        _interpolate(full_route[-2], full_route[-1], keep, last_seg)
+                    )
+                    total_dist = TARGET_DIST_MI
+                    break
+
+                full_route.pop()
+                total_dist -= last_seg
+                excess = total_dist - TARGET_DIST_MI
+
+            # Recompute from the returned coordinates to avoid carrying
+            # rounding differences from the route-construction phases.
+            total_dist = sum(
+                _haversine(a, b) for a, b in zip(full_route, full_route[1:])
+            )
         elif total_dist < TARGET_DIST_MI:
             # Undershoot: extend from finish along real graph edges.
             # Prefer extending toward the target POI to keep finish close.
@@ -1294,27 +1277,29 @@ def _generate_zone_sweep_route(
         start_to_sign = _haversine(full_route[0], sign_coord) if sign_coord else 0.0
         starts_near_sign = start_to_sign <= 0.5
 
-        # Finish must be within 0.5 mi of target POI
+        # Keep landmark proximity as a fallback preference, not a hard
+        # validation rule that can force the course over its target distance.
         if target_poi_coord is not None:
             finish_to_poi = _haversine(full_route[-1], target_poi_coord)  # type: ignore[arg-type]
         else:
             finish_to_poi = min(_haversine(full_route[-1], sn) for sn in strip_nodes)  # type: ignore[arg-type]
-        finishes_near_poi = finish_to_poi <= 0.75
+        distance_is_target = abs(total_dist - TARGET_DIST_MI) <= 1e-6
 
         if (
             not has_crossing
             and not has_node_reuse
             and starts_near_sign
-            and finishes_near_poi
+            and distance_is_target
         ):
             return full_route, total_dist
 
-        # Track best fallback: prefer routes that are close to valid.
-        # Score penalizes distance shortfall and finish distance from POI.
-        shortfall = max(0, TARGET_DIST_MI - total_dist)
+        # Track best fallback. Distance accuracy takes priority over staying
+        # near the requested finish landmark; that landmark is a preference
+        # once the course has been trimmed to the marathon distance.
+        distance_error = abs(TARGET_DIST_MI - total_dist)
         score = (
-            shortfall
-            + finish_to_poi * 2
+            distance_error * 1000
+            + finish_to_poi * 0.01
             + (10 if has_crossing else 0)
             + (10 if has_node_reuse else 0)
         )
@@ -1330,8 +1315,10 @@ def _generate_zone_sweep_route(
             reasons.append("node reuse (visual crossing)")
         if not starts_near_sign:
             reasons.append(f"start {start_to_sign:.2f} mi from Sign")
-        if not finishes_near_poi:
-            reasons.append(f"finish {finish_to_poi:.2f} mi from POI (max 0.75)")
+        if not distance_is_target:
+            reasons.append(
+                f"distance {total_dist:.3f} mi (target {TARGET_DIST_MI:.3f})"
+            )
         logger.warning(
             "PLANNER: Attempt %d rejected: %s",
             attempt + 1,
@@ -1416,8 +1403,9 @@ def _generate_best_route(
             best_clean_route = route
             best_clean_dist = dist
 
-        # Early exit: clean marathon-distance route found
-        if clean and dist >= TARGET_DIST_MI:
+        # Early exit only for a clean route at the target distance. An
+        # over-target route must never be accepted as a marathon route.
+        if clean and abs(dist - TARGET_DIST_MI) <= 1e-6:
             return route, dist
 
     # Prefer clean route even if shorter
