@@ -19,24 +19,33 @@ The agent progressively demonstrates capabilities such as well-structured system
 
 *   A Google Cloud project with billing enabled.
 *   Python 3.12 or newer and `pip` installed.
-*   A Google Maps API key (for the mapping MCP tools).
+*   A Google Maps API key if you want the remote Maps MCP tools enabled. The
+    agent can also resolve a configured Secret Manager key; without a key,
+    Maps tools start disabled. See [CODELAB.md](CODELAB.md) for details.
 
 ## Getting Started
 
 1.  **Set up the Python environment:**
+    Install `uv` if needed using the platform instructions in
+    [CODELAB.md](CODELAB.md), then create and activate the environment:
+
     ```bash
-    python -m venv .venv
+    uv venv .venv
     source .venv/bin/activate
-    pip install -r requirements.txt
+    uv pip install -r requirements.txt
     ```
+
+    On Windows PowerShell, activate it with
+    `.venv\Scripts\Activate.ps1`.
 
 2.  **Configure environment variables:**
     Create the agent environment file from its sample:
     ```bash
     cp planner_agent/sample.env planner_agent/.env
     ```
-    Set `GOOGLE_CLOUD_PROJECT` and `GOOGLE_MAPS_API_KEY` in
-    `planner_agent/.env`. The Maps key enables Maps MCP tools.
+    Set `GOOGLE_CLOUD_PROJECT` in `planner_agent/.env`. To enable Maps MCP
+    tools, provide `GOOGLE_MAPS_API_KEY` there or configure the Secret Manager
+    fallback described in [CODELAB.md](CODELAB.md).
 
     Create the root environment file for `main.py`:
     ```bash
@@ -125,4 +134,8 @@ file exists; otherwise it generates a route with the local GIS tool using seed
 
 ## Cleanup
 
-To avoid incurring charges, remember to delete the resources created during the codelab. Use the `main.py delete` command to remove deployed agents and delete the Google Cloud Project if necessary.
+To avoid ongoing charges, delete the deployed agent with `main.py delete` when
+you no longer need it. If you created a Google Cloud project solely for this
+codelab, delete it only after confirming it contains no resources you need and
+reviewing its billing. See [CODELAB.md](CODELAB.md) for optional secret cleanup
+and the full cleanup steps.
